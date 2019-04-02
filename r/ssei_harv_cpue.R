@@ -109,7 +109,8 @@ pot_effort <- pot_log %>% group_by(YEAR) %>%
 
 #JOIN FISHTICKET LBS AND LOGBOOK EFFORT TO CALCULATE CPUE#
 pot_cpue <- pot_ticketlbs %>% full_join(pot_effort) %>% 
-  mutate(cpue = total_pounds / total_effort) 
+  mutate(cpue = total_pounds / total_effort)
+#unsure how to incoporate sd for CPUE since data is outputted via ALEX with harvest summaries by stat-area
 
 pot_cpue_nonconf <- pot_cpue %>% filter(permit_count >= 3)
 
@@ -190,7 +191,9 @@ ggplot(data = srv_sum) +
 ggsave("figures/ssei_ll_survey_cpue.png", 
        dpi=300, height=7, width=8, units="in")
 
-#LL Fishery CPUE
+#LL Fishery CPUE 
+#SQL data is requested from Justin Daily (comm fish programmer) which allocates
+#harvest data by lbs per set 
 # Logbook/CPUE data  ----
 #Import sablefish_lbs_set file
 ll_set <- read_excel("data/fishery/raw_data/ssei longline sablefish lbs per set.xlsx")
@@ -219,6 +222,7 @@ fish_eff %>% filter(!is.na(date) & !is.na(hook_space) & !is.na(sable_lbs_set) &
                     !is.na(Hook_size) & Hook_size != "MIX" &
                     soak > 0 & !is.na(soak) & # soak time in hrs
                     #julian_day > 226 & # if there were special projects before the fishery opened
+                    #this was excluded since it crashed the code
                     no_hooks < 15000)  %>% # 15000 in Kray's scripts - 14370 is the 75th percentile
   mutate(Year = factor(year), 
          Gear = factor(Gear),
@@ -234,17 +238,11 @@ fish_eff %>% filter(!is.na(date) & !is.na(hook_space) & !is.na(sable_lbs_set) &
          # dummy varbs, for prediction with random effects
          dum = 1, 
          dumstat = 1) %>% 
-  #"sets" (aka effort_no) is the set identifier. Currently Martina's scripts
-  #filter out sets that Kamala identifies as halibut target sets. Create a new
-  #column that is the total number of sablefish target sets in a trip (trip_no's
-  #only unique within a year)
+  #sets are already pre-filtered via the SQL data request so only sablefish target trips are included
   group_by(year, trip_no) %>% 
   mutate(no_sets = n_distinct(sets)) %>% 
   group_by(year) %>% 
   mutate(
-    #The number of vessels participating in the fishery has descreased by 50% from
-    #1997-2015. create new column is the total number of active vessels
-    #participating in a given year
     total_vessels = n_distinct(Adfg),
     # Total unique trips per year
     total_trips = n_distinct(trip_no)) %>% 
