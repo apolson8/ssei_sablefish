@@ -1,6 +1,6 @@
 # Southern Southeast Inside Watrs (SSEI) Sablefish (*Anoplopoma fimbria*) Stock Assessment
 
-Please direct any questions to: Andrew Olson (andrew.olson@alaska.gov) <img src="http://acuasi.alaska.edu/sites/default/files/inline-images/fishandgame_small.png" width = "75" height = "75"> 
+src="http://acuasi.alaska.edu/sites/default/files/inline-images/fishandgame_small.png" width = "75" height = "75"> Please direct any questions to: Andrew Olson (andrew.olson@alaska.gov) <img  
 
 **Source:** *	Olson, A., J. Stahl, M. Vaughn, K. Carroll, and A. Baldwin. 2017. Annual management report for the Southeast Alaska and Yakutat groundfish fisheries, 2017. Alaska Department of Fish and Game, Fishery Management Report No. 17-54, Anchorage.*
 
