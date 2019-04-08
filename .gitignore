@@ -3,10 +3,6 @@
 .RData
 .Ruserdata
 
-#Ignore non_confidential data
-*fishery
-*figures
-*output
- 
-#Survey data no uploaded due to file size
-*survey
+*.xlxs
+*.csv
+*.png
