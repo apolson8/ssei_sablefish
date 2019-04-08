@@ -15,26 +15,26 @@ ssei_aho <- data.frame(year = c(1985, 1986, 1987, 1988, 1989, 1990, 1991, 1992,
 
 # data ----
 
-read_xlsx("data/SSEI fishticket data.xlsx") %>% 
+read_xlsx("data/fishery/raw_data/SSEI fishticket data.xlsx") %>% 
   rename_all(tolower) %>% 
   filter(species_code == 710, harvest_code != 43) -> fishery_df
 
-read_xlsx("data/SSEI pot logbook data.xlsx") %>% 
+read_xlsx("data/fishery/raw_data/SSEI pot logbook data.xlsx") %>% 
   rename_all(tolower) -> pot_log_df
 
-read_xlsx("data/SSEI longline logbook data.xlsx") %>% 
+read_xlsx("data/fishery/raw_data/SSEI longline logbook data.xlsx") %>% 
   rename_all(tolower) -> ll_log_df
 
-read_excel("data/ssei longline sablefish lbs per set.xlsx") %>% 
+read_excel("data/fishery/raw_data/ssei longline sablefish lbs per set.xlsx") %>% 
   rename_all(tolower) -> ll_set_df
 
-read_csv("data/ssei survey hook accounting.csv") %>% 
+read_csv("data/survey/raw_data/ssei survey hook accounting.csv") %>% 
   rename_all(tolower) -> hooks_df
 
-read_excel("data/SSEI LL survey bio data.xlsx") %>% 
+read_excel("data/survey/raw_data/SSEI LL survey bio data.xlsx") %>% 
   rename_all(tolower) -> svy_bio_df
 
-read.csv("data/SSEI port sampling data.csv", header = TRUE) %>% 
+read.csv("data/fishery/raw_data/SSEI port sampling data.csv", header = TRUE) %>% 
   rename_all(tolower) -> fish_bio_df
 
 # harvest by year and permit type ----
@@ -108,8 +108,10 @@ fishery_df %>%
             n = n(),
             se = sd / sqrt(n)) %>% 
   mutate(ll = cpue - 2 * se,
-         ul = cpue + 2 * se) %>% 
-  ggplot(aes(year, cpue)) +
+         ul = cpue + 2 * se) -> pot_cpue 
+  
+
+pot_cpue %>% ggplot(aes(year, cpue)) +
   geom_point() +
   geom_line() +
   geom_ribbon(aes(ymin = ll, ymax = ul), alpha=0.2) +
@@ -117,7 +119,7 @@ fishery_df %>%
   xlab('\nYear') +
   scale_x_continuous(breaks = xaxis$breaks, labels = xaxis$labels) +
   theme(plot.margin = unit(c(0.5,1,0.5,0.5), "cm")) +
-  expand_limits(y = 0) 
+  expand_limits(y = 0)
 
 ggsave("figures/pot_fishery_cpue.png", width = 6.5, 
        height = 5, units = "in", dpi = 200)
@@ -156,7 +158,9 @@ hooks_df %>%
   mutate(cpue = exp(lcpue - 1),
          se = exp(lsdev - 1) / sqrt(n),
          ul = cpue + se * 2,
-         ll = cpue - se * 2) %>% 
+         ll = cpue - se * 2) -> survey_cpue
+
+survey_cpue %>% 
   ggplot(aes(year, cpue)) +
   geom_point() +
   geom_line() +
@@ -236,8 +240,10 @@ fishery_cpue %>%
             var = var(std_cpue),
             cv = sdev / annual_cpue,
             upper = annual_cpue + (2 * se),
-            lower = annual_cpue - (2 * se)) %>% 
-  ggplot(aes(year, annual_cpue)) +
+            lower = annual_cpue - (2 * se)) -> fishery_cpue 
+  
+
+fishery_cpue %>% ggplot(aes(year, annual_cpue)) +
   geom_line() +
   geom_point() +
   geom_ribbon(aes(ymin = lower, ymax = upper),
@@ -249,7 +255,7 @@ fishery_cpue %>%
   theme(plot.margin = unit(c(0.5,1,0.5,0.5), "cm"))
 
 ggsave("figures/ssei_ll_fishery_cpue.png", width = 6.5, 
-       height = 8, units = "in", dpi = 200)
+       height = 5, units = "in", dpi = 200)
 
 # ages ----
 
@@ -264,7 +270,7 @@ svy_bio_df %>%
   geom_point(shape = 21) + 
   scale_size_area() +
   facet_wrap(~sex, ncol = 1) + 
-  ylab("Observed Age") + 
+  ylab("Observed Age") + xlab("Year") +
   theme(legend.position = "none") + 
   scale_x_continuous(breaks=xaxis$breaks, labels = xaxis$labels) + 
   scale_y_continuous(breaks = seq(0, 60, 10))
@@ -328,17 +334,17 @@ fish_bio_df %>%
                          sex_code == 2 ~ 'Female',
                          TRUE ~ 'Other'),
          length = length_millimeters / 10,
-         survey_type = ifelse(project_code==2, 'Longline', 'Pot'),
-         Year = factor(year)) -> fish_lengths
+         survey_type = ifelse(project_code==2, 'Longline', 'Pot')) -> fish_lengths
 
 fish_lengths %>% 
-  ggplot(aes(length, Year, group = Year, fill = Year)) + 
-  geom_density_ridges(aes(point_fill = Year, point_color = Year),
+  ggplot(aes(length, year, group = year, fill = year)) + 
+  geom_density_ridges(aes(point_fill = year, point_color = year),
                       alpha = 0.3) +
   geom_vline(xintercept = 61, linetype = 4) +
   xlim(35, 90) + 
   xlab("\nLength (cm)") + 
   ylab("Year\n") +
+  scale_y_reverse() +
   theme(legend.position = "none") + 
   facet_wrap(~ survey_type)
 
@@ -349,46 +355,49 @@ ggsave("figures/ssei_fishery_lengths.png", width = 6.5,
 # longline
 fish_lengths %>% 
   filter(survey_type == "Longline", Sex != 'Other') %>% 
-  ggplot(aes(length, Year, group = Year, fill = Year)) + 
-  geom_density_ridges(aes(point_fill = Year, point_color = Year),
+  ggplot(aes(length, year, group = year, fill = year)) + 
+  geom_density_ridges(aes(point_fill = year, point_color = year),
                        scale = 3, alpha = 0.3) +
   geom_vline(xintercept = 61, linetype = 3) +
   xlim(35, 90) +
   xlab("\nLength (cm)") + 
   ylab("Year\n") +
+  scale_y_reverse() +
+  theme(legend.position = "none") +
   facet_wrap(~ Sex)
 
-ggsave("figures/ssei_fishery_ll_lengths.png", width = 6.5, 
+ggsave("figures/ssei_fishery_ll_lengths_sex.png", width = 6.5, 
        height = 8, units = "in", dpi = 200)
 
 # pot
 fish_lengths %>% 
   filter(survey_type == "Pot", Sex != 'Other') %>% 
-  ggplot(aes(length, Year, group = Year, fill = Year)) + 
-  geom_density_ridges(aes(point_fill = Year, point_color = Year),
+  ggplot(aes(length, year, group = year, fill = year)) + 
+  geom_density_ridges(aes(point_fill = year, point_color = year),
                       scale = 3, alpha = 0.3) +
   geom_vline(xintercept = 61, linetype = 3) +
   xlim(35, 90) +
   xlab("\nLength (cm)") + 
   ylab("Year\n") +
+  scale_y_reverse() +
   theme(legend.position = "none") +
   facet_wrap(~ Sex)
 
-ggsave("figures/ssei_fishery_pot_lengths.png", width = 6.5, 
+ggsave("figures/ssei_fishery_pot_lengths_sex.png", width = 6.5, 
        height = 8, units = "in", dpi = 200)
 
 # survey lengths ----
 svy_bio_df %>% 
   filter(sex %in% c('Male', 'Female')) %>% 
-  mutate(length = `length millimeters` / 10, 
-         Year = factor(year)) %>% 
-  ggplot(aes(length, Year, group = Year, fill = Year)) + 
-    geom_density_ridges(aes(point_fill = Year, point_color = Year),
+  mutate(length = `length millimeters` / 10) %>% 
+  ggplot(aes(length, year, group = year, fill = year)) + 
+    geom_density_ridges(aes(point_fill = year, point_color = year),
                         scale = 3, alpha = 0.3) +
     geom_vline(xintercept = 61, linetype = 3) +
     xlab("Length (cm)") + ylab("Year") +
+  scale_y_reverse() +
   theme(legend.position = "none") +
-  xlim(35, 90) +
+  xlim(35, 90) + 
   facet_wrap(~ sex)
 
 ggsave("figures/ssei_survey_lengths.png", width = 6.5, 
