@@ -1,3 +1,4 @@
+
 # Libraries, ggplot themes, and user-defined functions used in this project
 # Author: Andrew Olson (andrew.olson@alaska.gov)
 # Last modified: April 2019
@@ -17,9 +18,8 @@ library(ggridges)    # length comps
 # devtools::install_github("ben-williams/FNGr")
 library("FNGr")
 
-# ggoplot themes ----
+theme_set(theme_sleek())
 
-loadfonts(device="win")
-windowsFonts(Times=windowsFont("TT Times New Roman"))
-theme_set(theme_bw(base_size=14,base_family='Times New Roman') +
-          theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()))
+#COLOR BLIND PALETTE#
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
