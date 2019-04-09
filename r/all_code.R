@@ -24,6 +24,7 @@ ssei_aho <- data.frame(year = c(1985:2019),
 
 read_xlsx("data/fishery/raw_data/SSEI fishticket data.xlsx") %>% 
   rename_all(tolower) %>% 
+  # test fishery = 43
   filter(species_code == 710, harvest_code != 43) -> fishery_df
 
 read_xlsx("data/fishery/raw_data/SSEI pot logbook data.xlsx") %>% 
