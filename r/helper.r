@@ -5,14 +5,17 @@
 # Libraries ----
 library(tidyverse)
 library(readxl)
-library(ggthemes)
-library(extrafont)
+library(ggthemes)   
+library(extrafont)  # for ggplot theme
 library(lubridate)
-library(gridExtra)
-library(tidyr)
-library(padr)
-library(anytime)
-library(ggridges)
+library(gridExtra)  
+library(tidyr)       # data processing
+library(padr)        # pads time series with 0s or interpolated values
+library(anytime)     # easily deals with any date/time format
+library(ggridges)    # length comps
+# install.packages("devtools")
+# devtools::install_github("ben-williams/FNGr")
+library("FNGr")
 
 # ggoplot themes ----
 
