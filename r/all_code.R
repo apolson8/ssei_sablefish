@@ -359,7 +359,7 @@ plot_age <- function(data = agecomp_df,
   
   
   print(p)
-  ggsave(plot = p, paste0(fig_path, "/agecomp_", label, ".png"), dpi=300, height=5, width=7.5, units="in")
+  ggsave(plot = p, paste0(fig_path, "/agecomp_", src, ".png"), dpi=300, height=5, width=7.5, units="in")
   
 }
 

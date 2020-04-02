@@ -4,7 +4,11 @@
 .Ruserdata
 
 *.xlxs
+*.xls
 *.csv
 *.png
+*.tiff
+*.jpg
+*.gif
 
-fishery
+*fishery
