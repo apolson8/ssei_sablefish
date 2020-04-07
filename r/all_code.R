@@ -3,13 +3,13 @@
 # Includes: survey and fishery CPUE and summary of biological data
 # Authors:  Andrew Olson (andrew.olson@alaska.gov); and Rhea Ehresmann (rhea.ehresmann@alaska.gov) 
 # Code adapted from J.S. NSEI Sablefish assessment: Jane Sullivan (jane.sullivan@alaska.gov)
-# Last modified: April 2, 2020
+# Last modified: April 7, 2020
 
 # set up ----
 source('r/helper.r') 
 
 # Create figure and output folders
-YEAR <- 2020 # most recent year of data
+YEAR <- 2020 # assessment year
 fig_path <- paste0('figures/', YEAR) # folder to hold all figures for a given year
 dir.create(fig_path) # creates YEAR subdirectory inside figures folder
 output_path <- paste0('output/', YEAR) # output and results
@@ -37,13 +37,13 @@ read_xlsx("data/fishery/raw_data/SSEI pot logbook data new.xlsx") %>%
 read_xlsx("data/fishery/raw_data/SSEI longline logbook data new.xlsx") %>% 
   rename_all(tolower) -> ll_log_df
 
-# Data from SQL request to Justin Daily 
+# Data from SQL request to Justin Daily - fishery logbook
 read_xlsx("data/fishery/raw_data/ssei longline sablefish lbs per set new.xlsx") %>% 
   rename_all(tolower) -> ll_set_df
 
 # Data from OceanAK query for longline survey hook accounting in SSEI 
 read_xlsx("data/survey/raw_data/ssei survey hook accounting new.xlsx") %>% 
-  rename_all(tolower) -> hooks_df
+  rename_all(tolower) -> srv_cpue
 
 # Data from OceanAK query for longline survey bio data in SSEI 
 read_xlsx("data/survey/raw_data/SSEI LL survey bio data new.xlsx") %>% 
@@ -167,51 +167,109 @@ ggsave(paste0(fig_path,"/pot_fishery_cpue.png"), width = 6.5,
 # Vaughn 2018-03-06: Sets (aka subsets with 12 or more invalid hooks are subset
 # condition code "02" or invalid)
 
-# we need to review raw data - looks like there are a few subsets with more than 12 invalid hooks that are not invalid
+srv_cpue <- srv_cpue %>% 
+  dplyr::select(year, trip_no = `trip no`, set = `set no`, skate = `subset no`,
+                skate_condition_cde = `subset condition code`, 
+                Stat = `g stat area`, bare = `hooks - number bare`,
+                bait = `hooks - number with bait`, invalid = `hooks - number invalid`,
+                no_hooks = `hooks - total number`, sablefish)
 
-hooks_df %>% 
-  dplyr::select(year, subset_condition_code = `subset condition code`, 
-                g_stat_area = `g stat area`, hooks_bare = `hooks - number bare`,
-                hooks_bait = `hooks - number with bait`, hooks_invalid = `hooks - number invalid`,
-                no_hooks = `hooks - total number`, sablefish) %>% 
+# we need to review raw data - looks like there are a few subsets with more than
+# 12 invalid hooks that are not invalid
+
+# data checks 
+
+# TODO: these should be changed to condition code 2. 
+srv_cpue %>% filter(skate_condition_cde %in% c(1,3) & invalid > 12) 
+srv_cpue <- srv_cpue %>% # Fix manually for now
+  mutate(skate_condition_cde = ifelse(skate_condition_cde %in% c(1,3) & invalid > 12, 
+                                      2, skate_condition_cde)) 
+
+srv_cpue %>% filter(no_hooks < 0) # there should be none
+
+
+srv_cpue %>% filter(year > 1997 & c(is.na(no_hooks) | no_hooks == 0)) # there should be none, there is one.
+# year trip_no   set skate skate_condition_cde   Stat  bare  bait invalid no_hooks sablefish
+# <dbl>   <dbl> <dbl> <dbl>               <dbl>  <dbl> <dbl> <dbl>   <dbl>    <dbl>     <dbl>
+#   1  2016       2     6    16                   2 325431    NA    NA      NA        0         0
+
+# TODO this needs to be fixed in database: bare, bait, invalid should all be 0,
+# skate_condition_cde should be 2. Fixed manually for now:
+srv_cpue <- srv_cpue %>% 
+  mutate(skate_condition_cde = ifelse(year > 1997 & c(is.na(no_hooks) | no_hooks == 0), 2, skate_condition_cde))
+
+# Get subset for cpue analysis, standardize hooks
+srv_cpue <- srv_cpue %>% 
   filter(year >= 1998, 
-         subset_condition_code %in% c(1, 3), 
-         no_hooks != 0) %>% 
-  mutate(Year = factor(year),
-         Stat = factor(g_stat_area),
-         hooks_bare = ifelse(is.na(hooks_bare), 0, hooks_bare),
-         hooks_bait = ifelse(is.na(hooks_bait), 0, hooks_bait),
-         hooks_invalid = ifelse(is.na(hooks_invalid), 0, hooks_invalid),
-         no_hooks = no_hooks - hooks_invalid,
+         skate_condition_cde %in% c(1, 3)) %>% 
+  replace_na(list(bare = 0, bait = 0, invalid = 0, sablefish = 0)) %>% 
+  mutate(no_hooks = no_hooks - invalid, # remove invalid hooks
          std_hooks = ifelse(year %in% c(1998, 1999), 2.2 * no_hooks * (1 - exp(-0.57 * (64 * 0.0254))),
-                            2.2 * no_hooks * (1 - exp(-0.57 * (78 * 0.0254)))),
-         sablefish_retained = replace_na(sablefish, 0), 
-         std_cpue = sablefish_retained / std_hooks) %>% 
+                            2.2 * no_hooks * (1 - exp(-0.57 * (78 * 0.0254)))))
+
+# Data set is currently at skate level (each row is a skate). CPUE should be
+# calculated at the set level (skates within a set are expected to be highly
+# correlated, not independent)
+srv_cpue %>% 
+  group_by(year, trip_no, set) %>%
+  dplyr::summarise(bare = sum(bare),
+         bait = sum(bait),
+         sablefish = sum(sablefish),
+         set_hooks = sum(std_hooks),
+         set_cpue = sablefish / set_hooks) %>%
+  ungroup() %>% 
+  mutate(trip_set_id = paste0(trip_no, "_", set)) %>% 
   group_by(year) %>% 
-  summarise(lcpue = mean(log(std_cpue + 1)),
-            lsdev = sd(log(std_cpue + 1)),
-            n = n()) %>% 
-  mutate(cpue = exp(lcpue - 1),
-         se = exp(lsdev - 1) / sqrt(n),
-         ul = cpue + se * 2,
-         ll = cpue - se * 2) -> survey_cpue
+  dplyr::summarise(n_set = length(unique(trip_set_id)),
+                   cpue = mean(set_cpue),
+                   sd = round(sd(set_cpue), 4),
+                   se = round(sd / sqrt(n_set), 4)) -> srv_cpue
 
-write_csv(survey_cpue, paste0(output_path, "/llsurvey_cpue.csv")) # save output
+write_csv(srv_cpue, paste0(output_path, "/llsurvey_cpue.csv")) # save output
 
-survey_cpue %>% 
-  ggplot(aes(year, cpue)) +
-  geom_point() +
-  geom_line() +
-  geom_ribbon(aes(ymin = ll, ymax = ul), alpha = 0.2) +
-  expand_limits(y = 0) +
-  ylab('CPUE (fish/hook)\n') +
-  xlab('\nYear') +
-  scale_x_continuous(breaks = xaxis$breaks, labels = xaxis$labels) +
-  ylim(0.3, 0.48) +
-  theme(plot.margin = unit(c(0.5,1,0.5,0.5), "cm"))
+# Percent change in compared to a ten year rolling average
+srv_cpue %>% 
+  filter(year > YEAR - 10 & year <= YEAR) %>% 
+  mutate(lt_mean = mean(cpue),
+         perc_change_lt = (cpue - lt_mean) / lt_mean * 100,
+         eval_lt = ifelse(perc_change_lt < 0, "decrease", "increase")) %>% 
+  filter(year == max(srv_cpue$year)) -> srv_lt
+srv_lt
 
- ggsave(paste0(fig_path,"/ssei_ll_survey_cpue.png"), width = 6.5, 
-       height = 5, units = "in", dpi = 200)
+# Percent change from last year
+srv_cpue %>% 
+  filter(year >= max(srv_cpue$year) - 1 & year <= max(srv_cpue$year)) %>%
+  select(year, cpue) %>% 
+  
+  mutate(year2 = ifelse(year == max(srv_cpue$year), "thisyr", "lastyr")) %>% 
+  dcast("cpue" ~ year2, value.var = "cpue") %>% 
+  mutate(perc_change_ly = (thisyr - lastyr) / lastyr * 100,
+         eval_ly = ifelse(perc_change_ly < 0, "decreased", "increased")) -> srv_ly
+srv_ly
+
+# Figure
+axis <- tickr(srv_cpue, year, 3)
+ggplot(data = srv_cpue) +
+  geom_point(aes(x = year, y = cpue)) +
+  geom_line(aes(x = year, y = cpue)) +
+  geom_ribbon(aes(year, ymin = cpue - sd, ymax = cpue + sd),
+              alpha = 0.2) +
+  scale_x_continuous(breaks = axis$breaks, labels = axis$labels) + 
+  lims(y = c(0, 0.3)) +
+  labs(x = NULL, y = "Survey CPUE (number per hook)\n") 
+
+ggsave(paste0(fig_path,"/ssei_ll_survey_cpue.png"), 
+       dpi = 300, width = 6.5, height = 5, units = "in")
+
+# Show how/where old cold was wrong:
+tst <- srv_cpue$cpue
+(tmp <- mean(log(tst+1)))
+exp(tmp-1) # see how the scale is now similar to the figs you had? this transformation isn't needed and was done incorrectly
+# If you ever wanted a log transformation adding 1 (i.e. if data included 0),
+# here's how to do it correctly:
+(tmp <- log(mean(tst)+1))
+exp(tmp)-1 # will equal mean(tst)
+mean(tst)
 
 # ll fishery cpue ----
 
@@ -268,7 +326,6 @@ ggsave(paste0(fig_path, "/fishery_trip_vessel_trends_1997_", YEAR, ".png"), widt
        height = 8, units = "in", dpi = 200)
 
 # nominal cpue ----
-xaxis <- FNGr::tickr(fishery_cpue, year, 2)
 
 fishery_cpue %>% 
   group_by(year) %>% 
@@ -283,19 +340,32 @@ fishery_cpue %>%
 
 write_csv(fish_sum, paste0(output_path, "/llfishery_cpue.csv")) # save output
 
+xaxis <- FNGr::tickr(fishery_cpue, year, 3)
 fish_sum %>% ggplot(aes(year, annual_cpue)) +
   geom_line() +
   geom_point() +
-  geom_ribbon(aes(ymin = lower, ymax = upper),
-              alpha = 0.3) +
-  ylab("Longline Fishery CPUE (lb/hook)\n") +
-  xlab("\nYear") +
+  geom_ribbon(aes(ymin = annual_cpue - sdev, ymax = annual_cpue + sdev),
+              alpha = 0.2) +
+  labs(x = NULL, y = "Longline Fishery CPUE (lb/hook)\n") +
   scale_x_continuous(breaks=xaxis$breaks, labels=xaxis$labels) +
-  expand_limits(y = 0) + ylim(0, 0.6) +
-  theme(plot.margin = unit(c(0.5,1,0.5,0.5), "cm"))
+  expand_limits(y = 0) + ylim(0, 0.9) 
 
 ggsave(paste0(fig_path, "/ssei_ll_fishery_cpue.png"), width = 6.5, 
        height = 5, units = "in", dpi = 200)
+
+# Percent change in fishery nominal cpue compared to a ten year rolling average
+fish_sum %>% 
+  filter(year > max(fish_sum$year) - 10) %>% 
+  mutate(lt_mean = mean(annual_cpue),
+         perc_change_lt = (annual_cpue - lt_mean) / lt_mean * 100)
+
+# Percent change in fishery nominal cpue from last year
+fish_sum %>% 
+  filter(year >= max(fish_sum$year) - 1) %>%
+  select(year, annual_cpue) %>% 
+  dcast("annual_cpue" ~ year) -> perc_ch
+names(perc_ch) <- c("cpue", "last_year", "this_year") 
+perc_ch %>% mutate(perc_change_ly = (`this_year` - `last_year`) / `last_year` * 100)
 
 # Age comps ----
 
