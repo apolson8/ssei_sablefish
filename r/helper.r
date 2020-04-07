@@ -17,6 +17,7 @@ library(ggridges)    # length comps
 #install.packages("devtools")
 #devtools::install_github("ben-williams/FNGr")
 library("FNGr")
+library(data.table)  # data processing
 
 theme_set(theme_sleek())
 
